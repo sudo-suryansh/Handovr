@@ -151,6 +151,7 @@
   --transition-spring: 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --navbar-h: 56px;
+  --credit-bar-h: 36px;
 }
 
 html { height: 100%; overflow: hidden; }
@@ -553,6 +554,7 @@ body {
   position: absolute;
   inset: 0;
   top: var(--navbar-h);
+  bottom: var(--credit-bar-h);
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -1360,7 +1362,7 @@ body {
 /* ── Toast ── */
 .toast {
   position: fixed;
-  bottom: calc(32px + var(--safe-bottom));
+  bottom: calc(var(--credit-bar-h) + 16px + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%) translateY(20px);
   background: var(--text);
@@ -1449,34 +1451,46 @@ body {
   font-weight: 600;
 }
 
-/* ── Uron Credit Link ── */
-.uron-credit {
+/* ── Persistent Credit Bar ── */
+.credit-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: calc(var(--credit-bar-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: #F1F5F9;
+  border-top: 1px solid rgba(0,0,0,0.07);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 45;
+}
+
+.uron-credit-bar-link {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  margin-top: 6px;
   font-size: 11px;
-  font-weight: 600;
-  color: var(--blue);
+  font-weight: 500;
+  color: #94A3B8;
   text-decoration: none;
-  padding: 5px 10px;
+  padding: 4px 10px;
   border-radius: var(--radius-pill);
-  background: var(--blue-light);
-  border: 1px solid var(--blue-mid);
-  transition: all var(--transition);
-  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
   letter-spacing: 0.1px;
 }
-.uron-credit:active {
-  transform: scale(0.95);
-  background: var(--blue-mid);
+.uron-credit-bar-link:active {
+  color: #64748B;
+  background: rgba(0,0,0,0.05);
 }
-.uron-credit svg { flex-shrink: 0; opacity: 0.8; }
+.uron-credit-bar-link svg {
+  opacity: 0.6;
+  flex-shrink: 0;
+}
 
 /* ── Mascot Popup ── */
 .mascot-popup {
   position: fixed;
-  bottom: calc(24px + var(--safe-bottom));
+  bottom: calc(var(--credit-bar-h) + 16px + var(--safe-bottom));
   right: 20px;
   z-index: 300;
   display: flex;
