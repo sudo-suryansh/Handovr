@@ -162,6 +162,22 @@ body {
 }
 .install-step-text strong { color: white; }
 
+.install-gate-subscribe {
+  margin-bottom: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.install-gate-subscribe a {
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.install-gate-subscribe a:hover {
+  text-decoration: underline;
+}
+
 .install-fallback {
   font-size: 12px;
   color: rgba(255,255,255,0.45);
@@ -554,7 +570,7 @@ body {
   position: absolute;
   inset: 0;
   top: var(--navbar-h);
-  bottom: var(--credit-bar-h);
+  bottom: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -629,6 +645,8 @@ body {
 
 /* ── Screen Layout ── */
 .screen-body {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   overflow-y: auto;
   padding: 8px 24px 24px;
@@ -656,6 +674,23 @@ body {
 }
 .footer-row--spaced {
   justify-content: space-between;
+}
+
+.footer-credit {
+  align-self: flex-end;
+  font-size: 11px;
+  font-weight: 500;
+  color: #94A3B8 !important; /* Force override typical link colors */
+  text-decoration: none !important;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+  margin-bottom: -2px;
+  margin-top: -2px;
+  transition: all 0.2s ease;
+}
+
+.footer-credit:hover {
+  color: #64748B !important;
 }
 
 /* ── Screen Title ── */
@@ -1369,7 +1404,7 @@ body {
 /* ── Toast ── */
 .toast {
   position: fixed;
-  bottom: calc(var(--credit-bar-h) + 16px + var(--safe-bottom));
+  bottom: calc(16px + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%) translateY(20px);
   background: var(--text);
@@ -1427,46 +1462,10 @@ body {
   font-weight: 600;
 }
 
-/* ── Persistent Credit Bar ── */
-.credit-bar {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: calc(var(--credit-bar-h) + var(--safe-bottom));
-  padding-bottom: var(--safe-bottom);
-  background: #F1F5F9;
-  border-top: 1px solid rgba(0,0,0,0.07);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 45;
-}
-
-.uron-credit-bar-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #94A3B8;
-  text-decoration: none;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  transition: color var(--transition), background var(--transition);
-  letter-spacing: 0.1px;
-}
-.uron-credit-bar-link:active {
-  color: #64748B;
-  background: rgba(0,0,0,0.05);
-}
-.uron-credit-bar-link svg {
-  opacity: 0.6;
-  flex-shrink: 0;
-}
-
 /* ── Mascot Popup ── */
 .mascot-popup {
   position: fixed;
-  bottom: calc(var(--credit-bar-h) + 16px + var(--safe-bottom));
+  bottom: calc(16px + var(--safe-bottom));
   right: 20px;
   z-index: 300;
   display: flex;

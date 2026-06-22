@@ -1,4 +1,4 @@
-const CACHE = 'handovr-v2';
+const CACHE = 'handovr-v4';
 // Relative to this file's own location, so this still works correctly
 // if the app is ever deployed under a subpath instead of the domain root
 // (index.html itself already links style.css/app.js/manifest.json relatively).
@@ -27,6 +27,19 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          caches.open(CACHE).then(c => c.put('./index.html', res.clone()));
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
