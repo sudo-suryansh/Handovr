@@ -2,8 +2,8 @@ const CACHE = 'handovr-v1';
 const ASSETS = [
   '/',
   '/index.html',
-  '/css/style.css',
-  '/js/app.js',
+  '/style.css',
+  '/app.js',
   '/manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap',
 ];

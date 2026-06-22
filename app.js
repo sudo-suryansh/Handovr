@@ -60,7 +60,34 @@ function showScreen(id, direction = 'forward') {
       }
     }
   });
+  // Push a history entry for every forward navigation so the Android
+  // hardware back button steps back through steps instead of exiting the app.
+  if (direction === 'forward') {
+    history.pushState({ screen: id }, '');
+  }
 }
+
+// Handle Android hardware / browser back button
+window.addEventListener('popstate', e => {
+  // Find the currently visible screen
+  const current = screens.find(s => {
+    const el = $('screen-' + s);
+    return el && !el.classList.contains('hidden');
+  });
+  if (!current) return;
+  const idx = screens.indexOf(current);
+  if (idx > 0) {
+    // Go back one step in our flow
+    const prev = screens[idx - 1];
+    // Re-init the target screen before showing it
+    if (prev === 'step1') initStep1();
+    showScreen(prev, 'back');
+    // Do NOT push a new state – we're going back, not forward
+  } else {
+    // Already on step1: let the browser/system handle it (minimize app)
+    history.pushState({ screen: 'step1' }, ''); // re-add so next back stays
+  }
+});
 
 function showToast(msg, type = 'default') {
   const t = $('toast');
@@ -548,6 +575,7 @@ $('edit-link').addEventListener('click', () => {
   showScreen('step3', 'back');
 });
 
+
 $('send-btn').addEventListener('click', async () => {
   haptic('medium');
   const msg = buildMessage();
@@ -555,43 +583,53 @@ $('send-btn').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Opening WhatsApp…';
 
+  const WA_ICON = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17.5 2.5A9.9 9.9 0 0010 0C4.48 0 0 4.48 0 10c0 1.76.46 3.4 1.26 4.83L0 20l5.32-1.24A9.94 9.94 0 0010 20c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.5-7.5z" fill="white" opacity="0.15"/><path d="M14.5 12.97c-.22-.11-1.3-.64-1.5-.71-.2-.07-.34-.11-.49.11-.14.22-.56.71-.69.86-.13.14-.25.16-.47.05-.22-.11-.93-.34-1.77-1.09-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.07-.11-.49-1.18-.67-1.61-.18-.42-.36-.36-.49-.37h-.42c-.14 0-.38.05-.58.27-.2.22-.76.74-.76 1.8s.78 2.09.89 2.23c.11.14 1.53 2.34 3.71 3.28.52.22.93.36 1.24.46.52.17 1 .14 1.37.09.42-.06 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.14-.42-.25z" fill="white"/></svg> Share on WhatsApp`;
+
+  function resetBtn() {
+    btn.disabled = false;
+    btn.innerHTML = WA_ICON;
+  }
+
   if (session.files.length > 0 && navigator.canShare) {
+    // Android's Web Share API silently drops `text` when files are included.
+    // Pass the message as both `title` and `text` — WhatsApp uses `text`
+    // as the caption; other targets use `title`. This covers both.
+    const shareWithText  = { title: msg, text: msg, files: session.files };
+    const shareFilesOnly = { files: session.files };
+
     try {
-      const shareData = { text: msg, files: session.files };
-      if (navigator.canShare(shareData)) {
-        await navigator.share(shareData);
-        afterSend();
-        return;
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        // fall through to deep link
+      if (navigator.canShare(shareWithText)) {
+        await navigator.share(shareWithText);
+      } else if (navigator.canShare(shareFilesOnly)) {
+        // Files can be shared but combined text+files not supported.
+        // Open WA deep-link for the text first, then share the files.
+        window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+        await new Promise(r => setTimeout(r, 900));
+        await navigator.share(shareFilesOnly);
       } else {
-        btn.disabled = false;
-        btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17.5 2.5A9.9 9.9 0 0010 0C4.48 0 0 4.48 0 10c0 1.76.46 3.4 1.26 4.83L0 20l5.32-1.24A9.94 9.94 0 0010 20c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.5-7.5z" fill="white" opacity="0.15"/><path d="M14.5 12.97c-.22-.11-1.3-.64-1.5-.71-.2-.07-.34-.11-.49.11-.14.22-.56.71-.69.86-.13.14-.25.16-.47.05-.22-.11-.93-.34-1.77-1.09-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.07-.11-.49-1.18-.67-1.61-.18-.42-.36-.36-.49-.37h-.42c-.14 0-.38.05-.58.27-.2.22-.76.74-.76 1.8s.78 2.09.89 2.23c.11.14 1.53 2.34 3.71 3.28.52.22.93.36 1.24.46.52.17 1 .14 1.37.09.42-.06 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.14-.42-.25z" fill="white"/></svg> Share on WhatsApp`;
-        return;
+        window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
       }
+      afterSend();
+      return;
+    } catch (err) {
+      if (err.name === 'AbortError') { resetBtn(); return; }
+      // Other error — fall through to text-only share
     }
   }
 
-  // Text-only or fallback: navigator.share
-  if (navigator.share && !session.files.length) {
+  // Text-only (no attachments)
+  if (navigator.share) {
     try {
       await navigator.share({ text: msg });
       afterSend();
       return;
     } catch (err) {
-      if (err.name === 'AbortError') {
-        btn.disabled = false;
-        btn.innerHTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17.5 2.5A9.9 9.9 0 0010 0C4.48 0 0 4.48 0 10c0 1.76.46 3.4 1.26 4.83L0 20l5.32-1.24A9.94 9.94 0 0010 20c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.5-7.5z" fill="white" opacity="0.15"/><path d="M14.5 12.97c-.22-.11-1.3-.64-1.5-.71-.2-.07-.34-.11-.49.11-.14.22-.56.71-.69.86-.13.14-.25.16-.47.05-.22-.11-.93-.34-1.77-1.09-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.07-.11-.49-1.18-.67-1.61-.18-.42-.36-.36-.49-.37h-.42c-.14 0-.38.05-.58.27-.2.22-.76.74-.76 1.8s.78 2.09.89 2.23c.11.14 1.53 2.34 3.71 3.28.52.22.93.36 1.24.46.52.17 1 .14 1.37.09.42-.06 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.14-.42-.25z" fill="white"/></svg> Share on WhatsApp`;
-        return;
-      }
+      if (err.name === 'AbortError') { resetBtn(); return; }
     }
   }
 
-  // Pure fallback
-  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
-  window.open(url, '_blank');
+  // Pure deep-link fallback
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
   afterSend();
 });
 
@@ -692,6 +730,10 @@ $('template-input').addEventListener('input', () => {
 
 // ── Splash → App ───────────────────────────────────────────
 window.addEventListener('load', () => {
+  // Seed a history entry so the very first hardware back press
+  // stays inside the app rather than closing/backgrounding it.
+  history.replaceState({ screen: 'step1' }, '');
+
   setTimeout(() => {
     const splash = $('splash');
     splash.classList.add('exit');
