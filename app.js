@@ -442,7 +442,11 @@ function updateCharCount() {
 
 // Attachments
 $('attach-trigger').addEventListener('click', () => $('file-input').click());
-$('camera-trigger').addEventListener('click', () => $('camera-input').click());
+$('camera-trigger').addEventListener('click', () => {
+  const input = $('camera-input');
+  if (input.showPicker) input.showPicker();
+  else input.click();
+});
 
 function addFilesToSession(files) {
   const isSameFile = (a, b) =>
