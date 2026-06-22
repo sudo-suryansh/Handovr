@@ -442,17 +442,27 @@ function updateCharCount() {
 
 // Attachments
 $('attach-trigger').addEventListener('click', () => $('file-input').click());
+$('camera-trigger').addEventListener('click', () => $('camera-input').click());
 
-$('file-input').addEventListener('change', e => {
-  const newFiles = Array.from(e.target.files || []);
+function addFilesToSession(files) {
   const isSameFile = (a, b) =>
     a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
-  newFiles.forEach(f => {
+
+  files.forEach(f => {
     if (!session.files.find(x => isSameFile(x, f))) session.files.push(f);
   });
-  e.target.value = '';
   renderFileList();
   haptic('light');
+}
+
+$('file-input').addEventListener('change', e => {
+  addFilesToSession(Array.from(e.target.files || []));
+  e.target.value = '';
+});
+
+$('camera-input').addEventListener('change', e => {
+  addFilesToSession(Array.from(e.target.files || []));
+  e.target.value = '';
 });
 
 function renderFileList() {
