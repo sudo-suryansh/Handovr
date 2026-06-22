@@ -1,3 +1,51 @@
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+:root {
+  --blue: #2563EB;
+  --navy: #1E3A8A;
+  --blue-light: #EFF6FF;
+  --blue-mid: #DBEAFE;
+  --slate: #64748B;
+  --slate-light: #94A3B8;
+  --bg: #F8FAFC;
+  --surface: #FFFFFF;
+  --border: rgba(0,0,0,0.07);
+  --border-strong: rgba(0,0,0,0.12);
+  --text: #0F172A;
+  --text-secondary: #64748B;
+  --text-tertiary: #94A3B8;
+  --success: #22C55E;
+  --success-bg: #F0FDF4;
+  --wa-green: #25D366;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 100px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+  --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --navbar-h: 56px;
+  --credit-bar-h: 36px;
+}
+
+html { height: 100%; overflow: hidden; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
 /* ── Install Gate ── */
 #install-gate {
   position: fixed;
@@ -117,54 +165,6 @@
 .install-fallback {
   font-size: 12px;
   color: rgba(255,255,255,0.45);
-}
-
-/* ── Reset & Base ── */
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
-:root {
-  --blue: #2563EB;
-  --navy: #1E3A8A;
-  --blue-light: #EFF6FF;
-  --blue-mid: #DBEAFE;
-  --slate: #64748B;
-  --slate-light: #94A3B8;
-  --bg: #F8FAFC;
-  --surface: #FFFFFF;
-  --border: rgba(0,0,0,0.07);
-  --border-strong: rgba(0,0,0,0.12);
-  --text: #0F172A;
-  --text-secondary: #64748B;
-  --text-tertiary: #94A3B8;
-  --success: #22C55E;
-  --success-bg: #F0FDF4;
-  --wa-green: #25D366;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-pill: 100px;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-lg: 0 12px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
-  --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --navbar-h: 56px;
-  --credit-bar-h: 36px;
-}
-
-html { height: 100%; overflow: hidden; }
-
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  height: 100%;
-  overflow: hidden;
-  font-size: 16px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
 }
 
 /* ── Splash ── */
@@ -564,6 +564,7 @@ body {
 }
 
 .screen.hidden {
+  display: none;
   transform: translateX(100%);
   opacity: 0;
   pointer-events: none;
@@ -1142,6 +1143,7 @@ body {
 }
 
 .panel.hidden {
+  display: none;
   transform: translateY(100%);
   opacity: 0;
   pointer-events: none;
@@ -1234,6 +1236,11 @@ body {
 .draft-tag--due {
   background: #FEF3C7;
   color: #92400E;
+}
+
+.draft-tag--files {
+  background: #F0FDF4;
+  color: #166534;
 }
 
 .draft-card-time {
@@ -1395,37 +1402,6 @@ body {
   opacity: 1 !important;
   pointer-events: auto !important;
   transform: translateY(0) !important;
-}
-
-/* ── Screen slide animations ── */
-.entering {
-  animation: slideInRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-.entering-back {
-  animation: slideInLeft 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-.slide-out-left {
-  animation: slideOutLeft 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-.slide-out-right {
-  animation: slideOutRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
-@keyframes slideInRight {
-  from { transform: translateX(48px); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
-}
-@keyframes slideInLeft {
-  from { transform: translateX(-48px); opacity: 0; }
-  to   { transform: translateX(0);     opacity: 1; }
-}
-@keyframes slideOutLeft {
-  from { transform: translateX(0);     opacity: 1; }
-  to   { transform: translateX(-48px); opacity: 0; }
-}
-@keyframes slideOutRight {
-  from { transform: translateX(0);    opacity: 1; }
-  to   { transform: translateX(48px); opacity: 0; }
 }
 
 /* ── Caption hint banner ── */

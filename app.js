@@ -63,8 +63,11 @@ if ('serviceWorker' in navigator) {
 
   window.addEventListener('appinstalled', () => window.location.reload());
 
-  throw new Error('INSTALL_GATE');
+  window._installGateActive = true;
 })();
+
+// ── App Code (only runs when installed as PWA) ─────────────
+if (!window._installGateActive) {
 
 
 const DEFAULT_STATE = {
@@ -302,10 +305,14 @@ $('menu-haptic-checkbox').addEventListener('change', e => {
 
 // ── Step 1: Class + Section ────────────────────────────────
 function initStep1() {
+  // Always reset section-block to hidden state so a fresh start (or reset)
+  // doesn't leave it visible from a previous session.
+  const sb = $('section-block');
+  sb.classList.remove('visible');
+
   buildPills('class-grid', state.classes, session.selectedClass, val => {
     session.selectedClass = val;
     session.selectedSection = '';
-    const sb = $('section-block');
     sb.classList.add('visible');
     buildPills('section-grid', state.sections, '', val2 => {
       session.selectedSection = val2;
@@ -316,7 +323,7 @@ function initStep1() {
   });
 
   if (session.selectedClass) {
-    $('section-block').classList.add('visible');
+    sb.classList.add('visible');
     buildPills('section-grid', state.sections, session.selectedSection, val => {
       session.selectedSection = val;
       haptic('medium');
@@ -1026,3 +1033,4 @@ window.addEventListener('load', () => {
     hideMascot();
   });
 })();
+} // end if (!window._installGateActive)
