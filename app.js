@@ -1,6 +1,75 @@
 'use strict';
 
-// ── State ──────────────────────────────────────────────────
+// ── Install Gate ───────────────────────────────────────────
+// Detect if running as installed PWA or in browser tab
+(function installGate() {
+  const isPWA = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true   // iOS Safari
+    || document.referrer.includes('android-app://'); // Android TWA
+
+  if (isPWA) return; // ✅ Installed — let the app run normally
+
+  // 🚫 Running in browser — show install gate, block app
+  const gate = document.getElementById('install-gate');
+  gate.classList.remove('hidden');
+
+  // Hide splash + app so nothing renders behind the gate
+  const splash = document.getElementById('splash');
+  const app    = document.getElementById('app');
+  if (splash) splash.style.display = 'none';
+  if (app)    app.classList.add('hidden');
+
+  let deferredPrompt = null;
+
+  // Capture the browser's native install prompt
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // Show the install button (it can trigger the native dialog)
+    const btn = document.getElementById('install-btn');
+    btn.classList.remove('hidden');
+    document.getElementById('install-steps').classList.add('hidden');
+  });
+
+  // If beforeinstallprompt never fires (already installed, iOS, etc.)
+  // show manual instructions after a short wait
+  setTimeout(() => {
+    if (!deferredPrompt) {
+      document.getElementById('install-steps').classList.remove('hidden');
+      const btn = document.getElementById('install-btn');
+      btn.textContent = 'How to install ↑';
+      btn.style.background = 'rgba(255,255,255,0.15)';
+      btn.style.border = '1.5px solid rgba(255,255,255,0.3)';
+    }
+  }, 800);
+
+  document.getElementById('install-btn').addEventListener('click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      if (outcome === 'accepted') {
+        // User accepted — they'll reopen from home screen
+        document.getElementById('install-btn').textContent = '✓ Installing… open from home screen';
+        document.getElementById('install-btn').disabled = true;
+      }
+    } else {
+      // Toggle manual steps visibility
+      const steps = document.getElementById('install-steps');
+      steps.classList.toggle('hidden');
+    }
+  });
+
+  // If app is installed while page is open, reload into PWA mode
+  window.addEventListener('appinstalled', () => {
+    window.location.reload();
+  });
+
+  // Prevent anything below from running
+  throw new Error('INSTALL_GATE');
+})();
+
+
 const DEFAULT_STATE = {
   classes:  ['1','2','3','4','5','6','7','8','9','10','11','12'],
   sections: ['A','B','C','D','E','F'],
@@ -43,56 +112,85 @@ function haptic(type = 'light') {
 const $ = id => document.getElementById(id);
 const screens = ['step1','step2','step3','step4'];
 
+// Track current screen for back-button logic
+let currentScreen = 'step1';
+
 function showScreen(id, direction = 'forward') {
+  currentScreen = id;
   screens.forEach(s => {
     const el = $('screen-' + s);
     if (!el) return;
     if (s === id) {
-      el.classList.remove('hidden', 'slide-out-left', 'entering', 'entering-back');
+      el.classList.remove('hidden', 'slide-out-left', 'slide-out-right', 'entering', 'entering-back');
+      void el.offsetWidth; // force reflow
       el.classList.add(direction === 'back' ? 'entering-back' : 'entering');
     } else if (!el.classList.contains('hidden')) {
       el.classList.remove('entering', 'entering-back');
       if (direction === 'back') {
-        el.classList.add('hidden');
+        el.classList.add('slide-out-right');
+        setTimeout(() => {
+          el.classList.add('hidden');
+          el.classList.remove('slide-out-right');
+        }, 320);
       } else {
         el.classList.add('slide-out-left');
-        setTimeout(() => el.classList.add('hidden'), 380);
+        setTimeout(() => {
+          el.classList.add('hidden');
+          el.classList.remove('slide-out-left');
+        }, 320);
       }
     }
   });
-  // Push a history entry for every forward navigation so the Android
-  // hardware back button steps back through steps instead of exiting the app.
+
+  // Push history state on forward navigation so Android back button
+  // navigates between steps instead of closing the app
   if (direction === 'forward') {
     history.pushState({ screen: id }, '');
   }
 }
 
-// Handle Android hardware / browser back button
-window.addEventListener('popstate', e => {
-  // Find the currently visible screen
-  const current = screens.find(s => {
-    const el = $('screen-' + s);
-    return el && !el.classList.contains('hidden');
-  });
-  if (!current) return;
-  const idx = screens.indexOf(current);
+// ── Android hardware back button ───────────────────────────
+window.addEventListener('popstate', () => {
+  // Close any open panels first
+  if (!$('settings-panel').classList.contains('hidden')) {
+    $('settings-panel').classList.add('hidden');
+    history.pushState({ screen: currentScreen }, '');
+    return;
+  }
+  if (!$('drafts-panel').classList.contains('hidden')) {
+    $('drafts-panel').classList.add('hidden');
+    history.pushState({ screen: currentScreen }, '');
+    return;
+  }
+  if (slideMenu.classList.contains('open')) {
+    closeMenu();
+    history.pushState({ screen: currentScreen }, '');
+    return;
+  }
+
+  const idx = screens.indexOf(currentScreen);
   if (idx > 0) {
-    // Go back one step in our flow
     const prev = screens[idx - 1];
-    // Re-init the target screen before showing it
     if (prev === 'step1') initStep1();
+    if (prev === 'step2') {
+      buildPills('subject-grid', state.subjects, session.selectedSubject, val => {
+        session.selectedSubject = val;
+        $('next-step2').disabled = false;
+        haptic('medium');
+      });
+      $('next-step2').disabled = !session.selectedSubject;
+    }
     showScreen(prev, 'back');
-    // Do NOT push a new state – we're going back, not forward
   } else {
-    // Already on step1: let the browser/system handle it (minimize app)
-    history.pushState({ screen: 'step1' }, ''); // re-add so next back stays
+    // On step1 — push a state so next back press also stays in app
+    history.pushState({ screen: 'step1' }, '');
   }
 });
 
 function showToast(msg, type = 'default') {
   const t = $('toast');
   t.textContent = msg;
-  t.style.background = type === 'success' ? '#166534' : type === 'draft' ? '#1d4ed8' : '';
+  t.style.background = type === 'success' ? '#166534' : type === 'draft' ? '#1d4ed8' : type === 'copy' ? '#7c3aed' : '';
   t.classList.remove('hidden');
   requestAnimationFrame(() => {
     requestAnimationFrame(() => t.classList.add('show'));
@@ -100,7 +198,7 @@ function showToast(msg, type = 'default') {
   setTimeout(() => {
     t.classList.remove('show');
     setTimeout(() => t.classList.add('hidden'), 350);
-  }, 2200);
+  }, 2800);
 }
 
 // ── Pill / Chip builders ───────────────────────────────────
@@ -162,7 +260,6 @@ $('menu-new-hw').addEventListener('click', () => {
   resetSession();
   initStep1();
   showScreen('step1', 'back');
-  // set active state
   document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('menu-item--active'));
   $('menu-new-hw').classList.add('menu-item--active');
 });
@@ -410,10 +507,9 @@ $('save-draft-btn').addEventListener('click', () => {
     selectedSubject: session.selectedSubject,
     dueLabel:        session.dueLabel,
     hwText:          session.hwText,
-    fileNames:       session.files.map(f => f.name), // store names only (files can't be serialized)
+    fileNames:       session.files.map(f => f.name),
   };
-  drafts.unshift(draft); // newest first
-  // keep max 20 drafts
+  drafts.unshift(draft);
   if (drafts.length > 20) drafts.splice(20);
   saveDraftsToStorage(drafts);
   updateDraftsBadge();
@@ -506,18 +602,15 @@ function renderDrafts() {
 }
 
 function loadDraft(draft) {
-  // Restore session from draft
   session.selectedClass   = draft.selectedClass   || '';
   session.selectedSection = draft.selectedSection || '';
   session.selectedSubject = draft.selectedSubject || '';
   session.dueLabel        = draft.dueLabel        || 'Today';
   session.hwText          = draft.hwText          || '';
-  session.files           = []; // can't restore File objects from serialised data
+  session.files           = [];
 
-  // Close panel and navigate
   $('drafts-panel').classList.add('hidden');
 
-  // Re-init step 1 with restored values, then jump straight to step 3
   initStep1();
   updateCrumb('crumb-step2');
   buildPills('subject-grid', state.subjects, session.selectedSubject, val => {
@@ -554,6 +647,12 @@ function buildPreview() {
     `;
     attachEl.appendChild(chip);
   });
+
+  // Show/hide the clipboard hint banner depending on whether files are attached
+  const hint = $('caption-hint');
+  if (hint) {
+    hint.classList.toggle('hidden', session.files.length === 0);
+  }
 }
 
 function buildMessage() {
@@ -575,6 +674,29 @@ $('edit-link').addEventListener('click', () => {
   showScreen('step3', 'back');
 });
 
+// ── Copy message to clipboard helper ──────────────────────
+async function copyMessageToClipboard(msg) {
+  try {
+    await navigator.clipboard.writeText(msg);
+    return true;
+  } catch (_) {
+    // Fallback for older Android WebViews
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = msg;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      return true;
+    } catch (_) { return false; }
+  }
+}
+
+// ── Send Button ────────────────────────────────────────────
+const WA_BTN_HTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17.5 2.5A9.9 9.9 0 0010 0C4.48 0 0 4.48 0 10c0 1.76.46 3.4 1.26 4.83L0 20l5.32-1.24A9.94 9.94 0 0010 20c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.5-7.5z" fill="white" opacity="0.15"/><path d="M14.5 12.97c-.22-.11-1.3-.64-1.5-.71-.2-.07-.34-.11-.49.11-.14.22-.56.71-.69.86-.13.14-.25.16-.47.05-.22-.11-.93-.34-1.77-1.09-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.07-.11-.49-1.18-.67-1.61-.18-.42-.36-.36-.49-.37h-.42c-.14 0-.38.05-.58.27-.2.22-.76.74-.76 1.8s.78 2.09.89 2.23c.11.14 1.53 2.34 3.71 3.28.52.22.93.36 1.24.46.52.17 1 .14 1.37.09.42-.06 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.14-.42-.25z" fill="white"/></svg> Share on WhatsApp`;
 
 $('send-btn').addEventListener('click', async () => {
   haptic('medium');
@@ -583,41 +705,59 @@ $('send-btn').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Opening WhatsApp…';
 
-  const WA_ICON = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17.5 2.5A9.9 9.9 0 0010 0C4.48 0 0 4.48 0 10c0 1.76.46 3.4 1.26 4.83L0 20l5.32-1.24A9.94 9.94 0 0010 20c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.5-7.5z" fill="white" opacity="0.15"/><path d="M14.5 12.97c-.22-.11-1.3-.64-1.5-.71-.2-.07-.34-.11-.49.11-.14.22-.56.71-.69.86-.13.14-.25.16-.47.05-.22-.11-.93-.34-1.77-1.09-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.07-.11-.49-1.18-.67-1.61-.18-.42-.36-.36-.49-.37h-.42c-.14 0-.38.05-.58.27-.2.22-.76.74-.76 1.8s.78 2.09.89 2.23c.11.14 1.53 2.34 3.71 3.28.52.22.93.36 1.24.46.52.17 1 .14 1.37.09.42-.06 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.14-.42-.25z" fill="white"/></svg> Share on WhatsApp`;
-
   function resetBtn() {
     btn.disabled = false;
-    btn.innerHTML = WA_ICON;
+    btn.innerHTML = WA_BTN_HTML;
   }
 
-  if (session.files.length > 0 && navigator.canShare) {
-    // Android's Web Share API silently drops `text` when files are included.
-    // Pass the message as both `title` and `text` — WhatsApp uses `text`
-    // as the caption; other targets use `title`. This covers both.
-    const shareWithText  = { title: msg, text: msg, files: session.files };
-    const shareFilesOnly = { files: session.files };
+  // ── Files attached: copy text to clipboard, then share files ──
+  if (session.files.length > 0) {
+    // 1. Copy message to clipboard so user can paste as caption
+    const copied = await copyMessageToClipboard(msg);
 
-    try {
-      if (navigator.canShare(shareWithText)) {
-        await navigator.share(shareWithText);
-      } else if (navigator.canShare(shareFilesOnly)) {
-        // Files can be shared but combined text+files not supported.
-        // Open WA deep-link for the text first, then share the files.
-        window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
-        await new Promise(r => setTimeout(r, 900));
-        await navigator.share(shareFilesOnly);
-      } else {
-        window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+    // 2. Try sharing files via Web Share API
+    if (navigator.canShare) {
+      const sharePayload = { files: session.files };
+      // Some Android builds do pass text with files — try it first
+      const shareWithText = { title: msg, text: msg, files: session.files };
+      try {
+        if (navigator.canShare(shareWithText)) {
+          await navigator.share(shareWithText);
+        } else if (navigator.canShare(sharePayload)) {
+          await navigator.share(sharePayload);
+        } else {
+          // canShare returned false — open WA deep link for text, no file share
+          window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+          afterSend();
+          return;
+        }
+        // Share sheet opened — show clipboard toast after a short delay
+        // (the share sheet is on top, toast appears when user returns)
+        if (copied) {
+          setTimeout(() => showToast('📋 Message copied — paste as caption in WhatsApp', 'copy'), 400);
+        }
+        afterSend();
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') {
+          // User cancelled the share sheet — reset button, keep on screen
+          resetBtn();
+          return;
+        }
+        // Other error — fall through to text-only deep link
       }
-      afterSend();
-      return;
-    } catch (err) {
-      if (err.name === 'AbortError') { resetBtn(); return; }
-      // Other error — fall through to text-only share
     }
+
+    // Web Share not available — open WA with text, tell user to attach file manually
+    if (copied) {
+      showToast('📋 Message copied — open WhatsApp and paste', 'copy');
+    }
+    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+    afterSend();
+    return;
   }
 
-  // Text-only (no attachments)
+  // ── No files: plain text share ──────────────────────────
   if (navigator.share) {
     try {
       await navigator.share({ text: msg });
@@ -633,21 +773,43 @@ $('send-btn').addEventListener('click', async () => {
   afterSend();
 });
 
+// ── After Send: reset and go back to step 1 ───────────────
 function afterSend() {
   haptic('success');
-  showToast('Sent to WhatsApp ✓', 'success');
+  showToast('Sent ✓', 'success');
+
+  // Reset immediately and navigate back to step 1
+  // Small delay so the share sheet has time to close cleanly
   setTimeout(() => {
     resetSession();
     initStep1();
-    showScreen('step1', 'back');
-  }, 1800);
+    // Clear history stack back to base so app is fresh
+    history.replaceState({ screen: 'step1' }, '');
+    currentScreen = 'step1';
+    // Hide all screens then show step1 cleanly
+    screens.forEach(s => {
+      const el = $('screen-' + s);
+      if (el) el.classList.add('hidden');
+    });
+    const s1 = $('screen-step1');
+    s1.classList.remove('hidden', 'slide-out-left', 'slide-out-right', 'entering-back');
+    s1.classList.add('entering');
+  }, 600);
 }
 
 $('new-hw-btn').addEventListener('click', () => {
   haptic('light');
   resetSession();
   initStep1();
-  showScreen('step1', 'back');
+  history.replaceState({ screen: 'step1' }, '');
+  currentScreen = 'step1';
+  screens.forEach(s => {
+    const el = $('screen-' + s);
+    if (el) el.classList.add('hidden');
+  });
+  const s1 = $('screen-step1');
+  s1.classList.remove('hidden', 'slide-out-left', 'slide-out-right', 'entering', 'entering-back');
+  s1.classList.add('entering');
 });
 
 function resetSession() {
@@ -730,8 +892,7 @@ $('template-input').addEventListener('input', () => {
 
 // ── Splash → App ───────────────────────────────────────────
 window.addEventListener('load', () => {
-  // Seed a history entry so the very first hardware back press
-  // stays inside the app rather than closing/backgrounding it.
+  // Seed initial history entry so first back press stays in app
   history.replaceState({ screen: 'step1' }, '');
 
   setTimeout(() => {

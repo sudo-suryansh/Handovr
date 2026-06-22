@@ -1,3 +1,124 @@
+/* ── Install Gate ── */
+#install-gate {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #1E3A8A 0%, #1d4ed8 60%, #2563EB 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 24px;
+}
+
+#install-gate.hidden { display: none; }
+
+.install-gate-card {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 24px;
+  padding: 36px 28px;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: splashIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.install-gate-icon {
+  width: 72px;
+  height: 72px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 20px;
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+
+.install-gate-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: white;
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
+}
+
+.install-gate-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,0.65);
+  line-height: 1.6;
+  margin-bottom: 28px;
+}
+
+.install-gate-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 20px;
+  background: white;
+  color: #1E3A8A;
+  font-size: 15px;
+  font-weight: 700;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  margin-bottom: 20px;
+}
+.install-gate-btn:active { transform: scale(0.97); }
+.install-gate-btn:disabled { opacity: 0.7; cursor: default; }
+
+.install-steps {
+  text-align: left;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.install-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255,255,255,0.08);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.install-step-num {
+  width: 24px;
+  height: 24px;
+  background: white;
+  color: #1E3A8A;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.install-step-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+  line-height: 1.5;
+}
+.install-step-text strong { color: white; }
+
+.install-fallback {
+  font-size: 12px;
+  color: rgba(255,255,255,0.45);
+}
+
 /* ── Reset & Base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
@@ -1272,6 +1393,60 @@ body {
   opacity: 1 !important;
   pointer-events: auto !important;
   transform: translateY(0) !important;
+}
+
+/* ── Screen slide animations ── */
+.entering {
+  animation: slideInRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.entering-back {
+  animation: slideInLeft 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.slide-out-left {
+  animation: slideOutLeft 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.slide-out-right {
+  animation: slideOutRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(48px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { transform: translateX(-48px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+@keyframes slideOutLeft {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(-48px); opacity: 0; }
+}
+@keyframes slideOutRight {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(48px); opacity: 0; }
+}
+
+/* ── Caption hint banner ── */
+.caption-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #faf5ff;
+  border: 1.5px solid #e9d5ff;
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #6b21a8;
+  line-height: 1.5;
+}
+.caption-hint svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #7c3aed;
+}
+.caption-hint strong {
+  font-weight: 600;
 }
 
 /* ── Utilities ── */
