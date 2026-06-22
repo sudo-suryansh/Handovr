@@ -1,5 +1,18 @@
 'use strict';
 
+// ── Service Worker ─────────────────────────────────────────
+// Must register unconditionally and BEFORE the install gate below.
+// Chrome only fires `beforeinstallprompt` once a controlling service
+// worker with a fetch handler is registered — if this were registered
+// after the gate's early-return/throw, the browser-tab visit (the one
+// case where we actually need the prompt) would never trigger it, and
+// the "Tap to Install Now" button would never appear.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+
 // ── Install Gate ───────────────────────────────────────────
 // Detect if running as installed PWA or in browser tab
 (function installGate() {
@@ -350,12 +363,42 @@ function initStep3() {
   hwInput.value = session.hwText;
   updateCharCount();
 
+  // Keep the attached-files list in sync with session.files — this was
+  // previously only rendered on attach/remove, so a reset session (after
+  // sending, or "Start fresh") left old file names visible here.
+  renderFileList();
+
+  const isCustomDue = !['Today', 'Tomorrow', 'This week'].includes(session.dueLabel);
   document.querySelectorAll('.due-chip').forEach(chip => {
     chip.classList.toggle('active', chip.dataset.due === session.dueLabel ||
-      (chip.dataset.due === 'custom' && !['Today','Tomorrow','This week'].includes(session.dueLabel)));
+      (chip.dataset.due === 'custom' && isCustomDue && session.dueLabel.length > 0));
   });
 
+  // Show the date picker only when a custom date is actually behind it;
+  // otherwise hide it and clear any stale leftover value.
+  const customDateEl = $('custom-date');
+  if (isCustomDue && session.dueLabel) {
+    customDateEl.classList.remove('hidden');
+  } else {
+    customDateEl.classList.add('hidden');
+    customDateEl.value = '';
+  }
+
   checkStep3();
+}
+
+function applyCustomDate() {
+  const val = $('custom-date').value;
+  if (val) {
+    const d = new Date(val);
+    if (!isNaN(d)) {
+      session.dueLabel = d.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+      return;
+    }
+  }
+  // No valid date chosen yet — don't let a stale previous dueLabel
+  // ("Today" etc.) sneak through and silently mismatch the UI.
+  session.dueLabel = '';
 }
 
 document.querySelectorAll('.due-chip').forEach(chip => {
@@ -365,6 +408,7 @@ document.querySelectorAll('.due-chip').forEach(chip => {
     chip.classList.add('active');
     if (chip.dataset.due === 'custom') {
       $('custom-date').classList.remove('hidden');
+      applyCustomDate();
     } else {
       session.dueLabel = chip.dataset.due;
       $('custom-date').classList.add('hidden');
@@ -373,11 +417,8 @@ document.querySelectorAll('.due-chip').forEach(chip => {
   });
 });
 
-$('custom-date').addEventListener('change', e => {
-  const d = new Date(e.target.value);
-  if (!isNaN(d)) {
-    session.dueLabel = d.toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
-  }
+$('custom-date').addEventListener('change', () => {
+  applyCustomDate();
   checkStep3();
 });
 
@@ -397,8 +438,10 @@ $('attach-trigger').addEventListener('click', () => $('file-input').click());
 
 $('file-input').addEventListener('change', e => {
   const newFiles = Array.from(e.target.files || []);
+  const isSameFile = (a, b) =>
+    a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
   newFiles.forEach(f => {
-    if (!session.files.find(x => x.name === f.name)) session.files.push(f);
+    if (!session.files.find(x => isSameFile(x, f))) session.files.push(f);
   });
   e.target.value = '';
   renderFileList();
@@ -550,6 +593,10 @@ function renderDrafts() {
     const subjMeta = draft.selectedSubject || '';
     const dueMeta = draft.dueLabel || '';
     const preview = draft.hwText || '(no text)';
+    const fileNames = draft.fileNames || [];
+    const fileMeta = fileNames.length
+      ? `📎 ${fileNames.length} file${fileNames.length > 1 ? 's' : ''} (not saved)`
+      : '';
 
     card.innerHTML = `
       <div class="draft-card-header">
@@ -558,6 +605,7 @@ function renderDrafts() {
           ${sectionMeta ? `<span class="draft-tag">${sectionMeta}</span>` : ''}
           ${subjMeta ? `<span class="draft-tag">${subjMeta}</span>` : ''}
           ${dueMeta ? `<span class="draft-tag draft-tag--due">Due: ${dueMeta}</span>` : ''}
+          ${fileMeta ? `<span class="draft-tag draft-tag--files">${fileMeta}</span>` : ''}
         </div>
         <span class="draft-card-time">${timeAgo(draft.savedAt)}</span>
       </div>
@@ -605,8 +653,14 @@ function loadDraft(draft) {
   updateCrumb('crumb-step3');
   showScreen('step3', 'forward');
   initStep3();
+  renderFileList();
 
-  showToast('Draft loaded ✓', 'draft');
+  const hadFiles = (draft.fileNames || []).length;
+  if (hadFiles) {
+    showToast(`Draft loaded — re-attach ${hadFiles} file${hadFiles > 1 ? 's' : ''} (not saved)`, 'draft');
+  } else {
+    showToast('Draft loaded ✓', 'draft');
+  }
 }
 
 function deleteDraft(id) {
@@ -640,12 +694,16 @@ function buildPreview() {
 }
 
 function buildMessage() {
+  // Escape '$' in user-supplied values so String.replace() doesn't treat
+  // sequences like $&, $$, $` or $' in them as special replacement patterns.
+  const esc = v => String(v).replace(/\$/g, '$$$$');
+
   return state.template
-    .replace('{class}',   session.selectedClass)
-    .replace('{section}', session.selectedSection)
-    .replace('{subject}', session.selectedSubject)
-    .replace('{due}',     session.dueLabel)
-    .replace('{hw}',      session.hwText);
+    .replace(/\{class\}/g,   esc(session.selectedClass))
+    .replace(/\{section\}/g, esc(session.selectedSection))
+    .replace(/\{subject\}/g, esc(session.selectedSubject))
+    .replace(/\{due\}/g,     esc(session.dueLabel))
+    .replace(/\{hw\}/g,      esc(session.hwText));
 }
 
 $('back-step4').addEventListener('click', () => {
@@ -691,17 +749,22 @@ function hasPdfFiles() {
 // ── Send Button ────────────────────────────────────────────
 const WA_BTN_HTML = `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17.5 2.5A9.9 9.9 0 0010 0C4.48 0 0 4.48 0 10c0 1.76.46 3.4 1.26 4.83L0 20l5.32-1.24A9.94 9.94 0 0010 20c5.52 0 10-4.48 10-10 0-2.67-1.04-5.18-2.5-7.5z" fill="white" opacity="0.15"/><path d="M14.5 12.97c-.22-.11-1.3-.64-1.5-.71-.2-.07-.34-.11-.49.11-.14.22-.56.71-.69.86-.13.14-.25.16-.47.05-.22-.11-.93-.34-1.77-1.09-.65-.58-1.09-1.3-1.22-1.52-.13-.22-.01-.34.1-.45.1-.1.22-.25.33-.38.11-.13.14-.22.22-.36.07-.14.04-.27-.02-.38-.07-.11-.49-1.18-.67-1.61-.18-.42-.36-.36-.49-.37h-.42c-.14 0-.38.05-.58.27-.2.22-.76.74-.76 1.8s.78 2.09.89 2.23c.11.14 1.53 2.34 3.71 3.28.52.22.93.36 1.24.46.52.17 1 .14 1.37.09.42-.06 1.3-.53 1.48-1.04.18-.51.18-.95.13-1.04-.05-.09-.2-.14-.42-.25z" fill="white"/></svg> Share on WhatsApp`;
 
+// Top-level so afterSend() can also restore the button after a successful
+// send — previously this only existed inside the click handler's closure,
+// so the AbortError paths reset it but a *successful* send left the button
+// stuck on "Opening WhatsApp…" and disabled forever.
+function resetSendBtn() {
+  const btn = $('send-btn');
+  btn.disabled = false;
+  btn.innerHTML = WA_BTN_HTML;
+}
+
 $('send-btn').addEventListener('click', async () => {
   haptic('medium');
   const msg = buildMessage();
   const btn = $('send-btn');
   btn.disabled = true;
   btn.textContent = 'Opening WhatsApp…';
-
-  function resetBtn() {
-    btn.disabled = false;
-    btn.innerHTML = WA_BTN_HTML;
-  }
 
   // ── Has PDFs: copy text NOW (sync, within click handler) then share PDFs ──
   if (session.files.length > 0 && hasPdfFiles()) {
@@ -727,7 +790,7 @@ $('send-btn').addEventListener('click', async () => {
         afterSend();
         return;
       } catch (err) {
-        if (err.name === 'AbortError') { resetBtn(); return; }
+        if (err.name === 'AbortError') { resetSendBtn(); return; }
       }
     }
 
@@ -748,7 +811,7 @@ $('send-btn').addEventListener('click', async () => {
         return;
       }
     } catch (err) {
-      if (err.name === 'AbortError') { resetBtn(); return; }
+      if (err.name === 'AbortError') { resetSendBtn(); return; }
     }
   }
 
@@ -759,7 +822,7 @@ $('send-btn').addEventListener('click', async () => {
       afterSend();
       return;
     } catch (err) {
-      if (err.name === 'AbortError') { resetBtn(); return; }
+      if (err.name === 'AbortError') { resetSendBtn(); return; }
     }
   }
 
@@ -812,6 +875,11 @@ function resetSession() {
     selectedSubject: '', dueLabel: 'Today',
     hwText: '', files: [],
   };
+  // Keep the DOM in lockstep with the cleared session — these previously
+  // only got refreshed lazily (or not at all), which is why old attached
+  // file names and a stuck send button could linger after a reset.
+  renderFileList();
+  resetSendBtn();
 }
 
 // ── Crumb Badge ────────────────────────────────────────────
@@ -901,10 +969,3 @@ window.addEventListener('load', () => {
     }, 500);
   }, 1400);
 });
-
-// ── Service Worker ─────────────────────────────────────────
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
-}

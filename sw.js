@@ -1,10 +1,13 @@
-const CACHE = 'handovr-v1';
+const CACHE = 'handovr-v2';
+// Relative to this file's own location, so this still works correctly
+// if the app is ever deployed under a subpath instead of the domain root
+// (index.html itself already links style.css/app.js/manifest.json relatively).
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/manifest.json',
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap',
 ];
 
