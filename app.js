@@ -969,3 +969,60 @@ window.addEventListener('load', () => {
     }, 500);
   }, 1400);
 });
+
+// ── Uron Credit + Mascot Popup ──────────────────────────────
+(function initUronCredit() {
+  const creditLink  = $('uron-credit');
+  const mascotPopup = $('mascot-popup');
+  if (!creditLink || !mascotPopup) return;
+
+  let mascotTimer = null;
+
+  function showMascot() {
+    // Clear any existing dismiss timer
+    clearTimeout(mascotTimer);
+
+    // Reset exit state then trigger visible
+    mascotPopup.classList.remove('mascot-exit');
+    // Force reflow so transition re-fires even if already visible
+    void mascotPopup.offsetWidth;
+    mascotPopup.classList.add('mascot-visible');
+
+    // Auto-dismiss after 3.5 s
+    mascotTimer = setTimeout(hideMascot, 3500);
+  }
+
+  function hideMascot() {
+    mascotPopup.classList.remove('mascot-visible');
+    mascotPopup.classList.add('mascot-exit');
+  }
+
+  creditLink.addEventListener('click', e => {
+    // Let the link open normally (target=_blank), but also:
+    haptic('light');
+    // Toast — re-use existing style, custom navy background
+    const t = $('toast');
+    t.textContent = '🙏 Thanks for visiting!';
+    t.style.background = '#1E3A8A';
+    t.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => t.classList.add('show'));
+    });
+    setTimeout(() => {
+      t.classList.remove('show');
+      setTimeout(() => {
+        t.classList.add('hidden');
+        t.style.background = '';
+      }, 350);
+    }, 2800);
+
+    // Mascot pops up a beat after the toast settles
+    setTimeout(showMascot, 400);
+  });
+
+  // Tapping mascot dismisses it early
+  mascotPopup.addEventListener('click', () => {
+    clearTimeout(mascotTimer);
+    hideMascot();
+  });
+})();
