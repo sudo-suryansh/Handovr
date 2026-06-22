@@ -13,35 +13,25 @@
   const gate = document.getElementById('install-gate');
   gate.classList.remove('hidden');
 
-  // Hide splash + app so nothing renders behind the gate
   const splash = document.getElementById('splash');
   const app    = document.getElementById('app');
   if (splash) splash.style.display = 'none';
   if (app)    app.classList.add('hidden');
 
+  // Always show manual steps immediately — beforeinstallprompt is unreliable
+  // (doesn't fire if dismissed before, doesn't fire on iOS, etc.)
+  document.getElementById('install-steps').classList.remove('hidden');
+
   let deferredPrompt = null;
 
-  // Capture the browser's native install prompt
+  // If the native install prompt IS available, show the quick-install button too
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
     deferredPrompt = e;
-    // Show the install button (it can trigger the native dialog)
     const btn = document.getElementById('install-btn');
     btn.classList.remove('hidden');
-    document.getElementById('install-steps').classList.add('hidden');
+    btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 20 20" fill="none"><path d="M10 3v10m0 0l-3-3m3 3l3-3M4 15h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> Tap to Install Now`;
   });
-
-  // If beforeinstallprompt never fires (already installed, iOS, etc.)
-  // show manual instructions after a short wait
-  setTimeout(() => {
-    if (!deferredPrompt) {
-      document.getElementById('install-steps').classList.remove('hidden');
-      const btn = document.getElementById('install-btn');
-      btn.textContent = 'How to install ↑';
-      btn.style.background = 'rgba(255,255,255,0.15)';
-      btn.style.border = '1.5px solid rgba(255,255,255,0.3)';
-    }
-  }, 800);
 
   document.getElementById('install-btn').addEventListener('click', async () => {
     if (deferredPrompt) {
@@ -49,23 +39,17 @@
       const { outcome } = await deferredPrompt.userChoice;
       deferredPrompt = null;
       if (outcome === 'accepted') {
-        // User accepted — they'll reopen from home screen
         document.getElementById('install-btn').textContent = '✓ Installing… open from home screen';
         document.getElementById('install-btn').disabled = true;
       }
-    } else {
-      // Toggle manual steps visibility
-      const steps = document.getElementById('install-steps');
-      steps.classList.toggle('hidden');
     }
   });
 
-  // If app is installed while page is open, reload into PWA mode
-  window.addEventListener('appinstalled', () => {
-    window.location.reload();
-  });
+  // Hide install btn by default — only shown if beforeinstallprompt fires
+  document.getElementById('install-btn').classList.add('hidden');
 
-  // Prevent anything below from running
+  window.addEventListener('appinstalled', () => window.location.reload());
+
   throw new Error('INSTALL_GATE');
 })();
 
@@ -648,10 +632,10 @@ function buildPreview() {
     attachEl.appendChild(chip);
   });
 
-  // Show/hide the clipboard hint banner depending on whether files are attached
+  // Show caption hint only when PDFs are attached (images work fine with text)
   const hint = $('caption-hint');
   if (hint) {
-    hint.classList.toggle('hidden', session.files.length === 0);
+    hint.classList.toggle('hidden', !session.files.some(f => f.name.toLowerCase().endsWith('.pdf')));
   }
 }
 
@@ -675,24 +659,33 @@ $('edit-link').addEventListener('click', () => {
 });
 
 // ── Copy message to clipboard helper ──────────────────────
-async function copyMessageToClipboard(msg) {
+// Must be called synchronously within a user-gesture handler
+// (the click event) — BEFORE any async operations that lose focus
+function copyMessageToClipboardSync(msg) {
+  // execCommand is synchronous and works within the click handler
+  // even on older Android WebViews where clipboard API needs a Promise
   try {
-    await navigator.clipboard.writeText(msg);
+    const ta = document.createElement('textarea');
+    ta.value = msg;
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) return true;
+  } catch (_) {}
+
+  // Modern async fallback (may fail if focus is lost, but try anyway)
+  try {
+    navigator.clipboard.writeText(msg).catch(() => {});
     return true;
-  } catch (_) {
-    // Fallback for older Android WebViews
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = msg;
-      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      return true;
-    } catch (_) { return false; }
-  }
+  } catch (_) {}
+  return false;
+}
+
+function hasPdfFiles() {
+  return session.files.some(f => f.name.toLowerCase().endsWith('.pdf'));
 }
 
 // ── Send Button ────────────────────────────────────────────
@@ -710,54 +703,56 @@ $('send-btn').addEventListener('click', async () => {
     btn.innerHTML = WA_BTN_HTML;
   }
 
-  // ── Files attached: copy text to clipboard, then share files ──
-  if (session.files.length > 0) {
-    // 1. Copy message to clipboard so user can paste as caption
-    const copied = await copyMessageToClipboard(msg);
+  // ── Has PDFs: copy text NOW (sync, within click handler) then share PDFs ──
+  if (session.files.length > 0 && hasPdfFiles()) {
+    // Copy FIRST — synchronously while we still have focus from the tap
+    const copied = copyMessageToClipboardSync(msg);
 
-    // 2. Try sharing files via Web Share API
     if (navigator.canShare) {
-      const sharePayload = { files: session.files };
-      // Some Android builds do pass text with files — try it first
-      const shareWithText = { title: msg, text: msg, files: session.files };
+      const shareWithText  = { title: msg, text: msg, files: session.files };
+      const shareFilesOnly = { files: session.files };
       try {
         if (navigator.canShare(shareWithText)) {
           await navigator.share(shareWithText);
-        } else if (navigator.canShare(sharePayload)) {
-          await navigator.share(sharePayload);
+        } else if (navigator.canShare(shareFilesOnly)) {
+          await navigator.share(shareFilesOnly);
         } else {
-          // canShare returned false — open WA deep link for text, no file share
           window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
           afterSend();
           return;
         }
-        // Share sheet opened — show clipboard toast after a short delay
-        // (the share sheet is on top, toast appears when user returns)
         if (copied) {
-          setTimeout(() => showToast('📋 Message copied — paste as caption in WhatsApp', 'copy'), 400);
+          showToast('📋 Message copied — paste as caption in WhatsApp', 'copy');
         }
         afterSend();
         return;
       } catch (err) {
-        if (err.name === 'AbortError') {
-          // User cancelled the share sheet — reset button, keep on screen
-          resetBtn();
-          return;
-        }
-        // Other error — fall through to text-only deep link
+        if (err.name === 'AbortError') { resetBtn(); return; }
       }
     }
 
-    // Web Share not available — open WA with text, tell user to attach file manually
-    if (copied) {
-      showToast('📋 Message copied — open WhatsApp and paste', 'copy');
-    }
+    // No Web Share — open WA deep link
+    if (copied) showToast('📋 Message copied — paste in WhatsApp', 'copy');
     window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
     afterSend();
     return;
   }
 
-  // ── No files: plain text share ──────────────────────────
+  // ── Images only or no files: Web Share handles text+image fine ──
+  if (session.files.length > 0 && navigator.canShare) {
+    const shareData = { title: msg, text: msg, files: session.files };
+    try {
+      if (navigator.canShare(shareData)) {
+        await navigator.share(shareData);
+        afterSend();
+        return;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') { resetBtn(); return; }
+    }
+  }
+
+  // ── Text only ──────────────────────────────────────────
   if (navigator.share) {
     try {
       await navigator.share({ text: msg });
@@ -768,7 +763,6 @@ $('send-btn').addEventListener('click', async () => {
     }
   }
 
-  // Pure deep-link fallback
   window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
   afterSend();
 });
