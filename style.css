@@ -1048,10 +1048,6 @@ body {
 .attach-trigger:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
 .attach-trigger:active { transform: scale(0.97); }
 
-.attach-trigger--camera {
-  border-style: solid;
-}
-
 .file-list { display: flex; flex-direction: column; gap: 6px; }
 
 .file-item {
